@@ -1,0 +1,19 @@
+# Server configurations
+server:
+  host: 0.0.0.0
+  port: 2088
+
+targets:
+  - host: 127.0.0.1
+    port: 2089
+  - host: 127.0.0.1
+    port: 2090
+    src_port: 2090
+
+prometheus:
+  enabled: true
+  listen: ":2112"
+
+pprof:
+  enabled: false
+  listen: ":6060"
