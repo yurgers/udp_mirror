@@ -1,4 +1,3 @@
-// internal/worker/worker.go
 package worker
 
 import (

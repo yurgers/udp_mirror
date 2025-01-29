@@ -1,4 +1,3 @@
-// internal/sender/udp_sender.go
 package sender
 
 import (

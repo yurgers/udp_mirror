@@ -1,4 +1,3 @@
-// internal/manager/worker_manager.go
 package manager
 
 import (

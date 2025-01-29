@@ -1,4 +1,3 @@
-// internal/pprof/pprof.go
 package pprof
 
 import (
