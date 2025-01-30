@@ -1,6 +1,7 @@
 package sender
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -54,9 +55,12 @@ type UDPSender struct {
 	conn    net.PacketConn
 	rawConn *ipv4.RawConn
 	mu      sync.Mutex
+	plName  string
 }
 
-func NewUDPSender(target config.TargetConfig) (PacketSender, error) {
+func NewUDPSender(ctx context.Context, target config.TargetConfig) (PacketSender, error) {
+	plName, _ := ctx.Value(config.PlNameKey).(string)
+
 	listen := "127.0.0.1"
 	if target.Host.String() != listen {
 		listen = ""
@@ -87,6 +91,7 @@ func NewUDPSender(target config.TargetConfig) (PacketSender, error) {
 		mtu:     mtu,
 		conn:    conn,
 		rawConn: rawConn,
+		plName:  plName,
 	}, nil
 }
 
@@ -124,7 +129,7 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 	if len(buffer) <= s.mtu {
 		err := s.rawConn.WriteTo(ipHeader, buffer, nil)
 		if err != nil {
-			log.Fatal("WriteTo: ", err)
+			log.Fatalf("[Pipeline %s] WriteTo: %v", s.plName, err)
 		}
 
 		recipient := fmt.Sprintf("%s:%d", s.dst.Host.String(), s.dst.Port)
@@ -155,7 +160,7 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 
 				err := s.rawConn.WriteTo(ipHeader, fragmet, nil)
 				if err != nil {
-					log.Fatal("WriteTo: ", err)
+					log.Fatalf("[Pipeline %v] WriteTo: %v\n", s.plName, err)
 				}
 
 			} else {
@@ -167,7 +172,7 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 
 				err := s.rawConn.WriteTo(ipHeader, buffer, nil)
 				if err != nil {
-					log.Fatal("WriteTo: ", err)
+					log.Fatalf("[Pipeline %v] WriteTo: %v\n", s.plName, err)
 				}
 
 				// fmt.Println(ipHeader)
@@ -187,11 +192,11 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 func (s *UDPSender) Close() {
 	err := s.rawConn.Close()
 	if err != nil {
-		log.Println(err)
+		log.Fatalf("[Pipeline %v] err: %v\n", s.plName, err)
 	}
 
 	err = s.conn.Close()
 	if err != nil {
-		log.Println(err)
+		log.Fatalf("[Pipeline %v] err: %v\n", s.plName, err)
 	}
 }

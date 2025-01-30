@@ -16,14 +16,10 @@ type Pipeline struct {
 	Name    string
 	Input   config.AddrConfig
 	Targets []config.TargetConfig
-
-	ctx    context.Context
-	cancel context.CancelFunc
 }
 
 // NewWorkerManager создает и инициализирует WorkerManager
-func NewPipeline(ctx context.Context, p_cfg config.Pipeline) *Pipeline {
-	ctx, cancel := context.WithCancel(ctx)
+func NewPipeline(p_cfg config.Pipeline) *Pipeline {
 
 	chs := make([]chan worker.IRPData, len(p_cfg.Targets))
 	//инциализация chs
@@ -37,21 +33,23 @@ func NewPipeline(ctx context.Context, p_cfg config.Pipeline) *Pipeline {
 		Name:    p_cfg.Name,
 		Input:   p_cfg.Input,
 		Targets: p_cfg.Targets,
-
-		ctx:    ctx,
-		cancel: cancel,
 	}
 
 	return pipeline
 }
 
 func (pl *Pipeline) Start(ctx context.Context) {
-	log.Printf("Запуск pipeline %s...\n", pl.Name)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	ctx = context.WithValue(ctx, config.PlNameKey, pl.Name)
+
+	log.Printf("[Pipeline %s] Запуск...\n", pl.Name)
 
 	// Создаем слушателя
 	listener, err := listener.NewUDPListener(ctx, pl.Input, pl.Channels)
 	if err != nil {
-		log.Fatalf("Pipeline %s. Ошибка запуска UDP слушателя: %v\n", pl.Name, err)
+		log.Fatalf("[Pipeline %s] Ошибка запуска UDP слушателя: %v\n", pl.Name, err)
 	}
 	defer listener.Close()
 
@@ -60,20 +58,16 @@ func (pl *Pipeline) Start(ctx context.Context) {
 		defer listener.Shutdown()
 	}()
 
-	workerManager, err := manager.NewWorkerManager(pl.ctx, pl.Targets, sender.NewUDPSender)
+	workerManager, err := manager.NewWorkerManager(ctx, pl.Targets, sender.NewUDPSender)
 	if err != nil {
-		log.Panicln(err)
+		log.Panicf("[Pipeline %s] %v", pl.Name, err)
 	}
 
 	workerManager.Start(pl.Channels)
 
-	log.Printf("Сервер %s запущен и слушает на %s\n", pl.Name, listener.LocalAddr())
-
-	<-pl.ctx.Done()
-
-	log.Printf("Остановка pipeline %s...\n", pl.Name)
+	<-ctx.Done()
+	log.Printf("[Pipeline %s] Остановка...\n", pl.Name)
 	workerManager.Shutdown()
 
-	pl.cancel()
-
+	log.Printf("[Pipeline %s] Завершен\n", pl.Name)
 }

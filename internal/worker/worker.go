@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"log"
 	"udp_mirror/config"
 	"udp_mirror/internal/sender"
@@ -16,27 +17,10 @@ type Worker struct {
 	Sender sender.PacketSender
 }
 
-func (w *Worker) ProcessPackets(ch <-chan IRPData) {
-	// listen := "127.0.0.1"
-	// if w.Target.Host.String() != listen {
-	// 	listen = ""
-	// }
+func (w *Worker) StartProcessPackets(ctx context.Context, ch <-chan IRPData) {
+	plName, _ := ctx.Value(config.PlNameKey).(string)
 
-	// conn, err := net.ListenPacket("ip4:udp", listen)
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// }
-	// defer conn.Close()
-
-	//
-
-	// rawConn, err := ipv4.NewRawConn(conn)
-	// if err != nil {
-	// 	log.Fatalf("Ошибка создания RawConn: %v", err)
-	// }
-	// defer rawConn.Close()
-
-	log.Println("Worker запущен:", w.Target)
+	log.Printf("[Pipeline %s] Worker запущен: %+v", plName, w.Target)
 
 	for data := range ch {
 		// log.Println("Полученные данные:", len(data.Data), "для", w.Target)
@@ -53,6 +37,6 @@ func (w *Worker) ProcessPackets(ch <-chan IRPData) {
 		// time.Sleep(500 * time.Millisecond)
 	}
 
-	log.Println("Worker завершен:", w.Target)
+	log.Printf("[Pipeline %s] Worker завершен: %+v\n", plName, w.Target)
 
 }

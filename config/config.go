@@ -62,3 +62,7 @@ func GetConfig(fileName string) Config {
 	}
 	return cfg
 }
+
+type ctxKey string
+
+const PlNameKey ctxKey = "pl_name"

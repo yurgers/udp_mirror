@@ -54,12 +54,15 @@ func isTimeoutError(err error) bool {
 
 // Listen начинает прием данных с UDP-соединения
 func (l *UDPListener) Start() {
+	plName, _ := l.ctx.Value(config.PlNameKey).(string)
+	log.Printf("[Pipeline %s] Сервер запущен и слушает на %s\n", plName, l.conn.LocalAddr())
+
 	buffer := make([]byte, 65536)
 
 	for {
 		select {
 		case <-l.ctx.Done():
-			log.Println("UDP Listener завершает работу...")
+			log.Printf("[Pipeline %s] UDP Listener завершает работу...\n", plName)
 			return
 		default:
 			l.conn.SetReadDeadline(l.nextReadDeadline())
@@ -68,7 +71,7 @@ func (l *UDPListener) Start() {
 				if isTimeoutError(err) {
 					continue // Просто повторяем чтение, если таймаут
 				}
-				log.Printf("Ошибка чтения из UDP: %v", err)
+				log.Printf("[Pipeline %s] Ошибка чтения из UDP: %v\n", plName, err)
 				return
 			}
 			// log.Println("Полученные данные от", src)
@@ -108,10 +111,11 @@ func (l *UDPListener) processData(data []byte, src *net.UDPAddr) {
 // }
 
 func (l *UDPListener) Shutdown() {
-	l.Close()
 	for _, channel := range l.channels {
 		close(channel)
 	}
+
+	l.Close()
 }
 
 // Close закрывает соединение UDP

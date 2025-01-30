@@ -59,25 +59,20 @@ func main() {
 		wg_pl.Add(1)
 		go func(p_cfg config.Pipeline) {
 			defer wg_pl.Done()
-			pl := pipeline.NewPipeline(ctx, p_cfg)
+			pl := pipeline.NewPipeline(p_cfg)
 			pl.Start(ctx)
 		}(pl_cfg)
 	}
 
-	// for _, pl_cfg := range cfg.Pipeline {
-	// 	go func(p_cfg config.Pipeline) {
-	// 		pl := pipeline.NewPipeline(ctx, p_cfg)
-	// 		pl.Start(ctx)
-	// 	}(pl_cfg)
-	// }
-
 	// Ожидаем завершения контекста (когда вызовем cancel)
 	<-ctx.Done()
+	log.Println("[Main] Остановка сервера...")
 
-	log.Println("Остановка сервера...")
 	wg_pl.Wait()
+	log.Println("[Main] Все Pipeline завершены...")
+
 	// workerManager.Shutdown()
-	log.Println("Сервер завершил работу")
+	log.Println("[Main] Сервер завершил работу")
 }
 
 func runInBackground(configFile string, args []string) {
@@ -93,6 +88,6 @@ func handleShutdown(cancel context.CancelFunc) {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	<-sigChan // Ждём сигнала
-	log.Println("Получен сигнал завершения, останавливаем сервер...")
+	log.Println("[Main] Получен сигнал завершения, останавливаем сервер...")
 	cancel() // Отправляем сигнал остановки всем горутинам
 }

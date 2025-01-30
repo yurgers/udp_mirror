@@ -18,7 +18,7 @@ type WorkerManager struct {
 	cancel context.CancelFunc
 }
 
-type SenderFactoryFunc func(config.TargetConfig) (sender.PacketSender, error)
+type SenderFactoryFunc func(context.Context, config.TargetConfig) (sender.PacketSender, error)
 
 // NewWorkerManager создает и инициализирует WorkerManager
 func NewWorkerManager(ctx context.Context, targets []config.TargetConfig, senderFactory SenderFactoryFunc) (*WorkerManager, error) {
@@ -31,7 +31,7 @@ func NewWorkerManager(ctx context.Context, targets []config.TargetConfig, sender
 
 	for _, target := range targets {
 		// Создаем менеджер воркеров
-		sender, err := senderFactory(target)
+		sender, err := senderFactory(ctx, target)
 		if err != nil || sender == nil {
 			return nil, errors.New("ошибка при создании PacketSender")
 		}
@@ -52,12 +52,12 @@ func (wm *WorkerManager) Start(chs []chan worker.IRPData) {
 		wm.wg.Add(1)
 		go func(w *worker.Worker, ch <-chan worker.IRPData) {
 			defer wm.wg.Done()
-			w.ProcessPackets(ch)
+			w.StartProcessPackets(wm.ctx, ch)
 		}(wk, chs[i])
 	}
 }
 
 func (wm *WorkerManager) Shutdown() {
-	wm.wg.Wait()
 	wm.cancel()
+	wm.wg.Wait()
 }
