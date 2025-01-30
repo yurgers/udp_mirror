@@ -2,10 +2,8 @@ package worker
 
 import (
 	"log"
-	"net"
 	"udp_mirror/config"
-
-	"golang.org/x/net/ipv4"
+	"udp_mirror/internal/sender"
 )
 
 type IRPData struct {
@@ -15,39 +13,46 @@ type IRPData struct {
 
 type Worker struct {
 	Target config.TargetConfig
-	Sender PacketSender
+	Sender sender.PacketSender
 }
 
-type PacketSender interface {
-	SendPacket(rawConn *ipv4.RawConn, data []byte, src config.AddrConfig, dst config.AddrConfig)
-}
+func (w *Worker) ProcessPackets(ch <-chan IRPData) {
+	// listen := "127.0.0.1"
+	// if w.Target.Host.String() != listen {
+	// 	listen = ""
+	// }
 
-func (w *Worker) ProcessPackets(c <-chan IRPData) {
-	listen := "127.0.0.1"
-	if w.Target.Host.String() != listen {
-		listen = ""
-	}
+	// conn, err := net.ListenPacket("ip4:udp", listen)
+	// if err != nil {
+	// 	log.Fatalln(err)
+	// }
+	// defer conn.Close()
 
-	con, err := net.ListenPacket("ip4:udp", listen)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer con.Close()
+	//
+
+	// rawConn, err := ipv4.NewRawConn(conn)
+	// if err != nil {
+	// 	log.Fatalf("Ошибка создания RawConn: %v", err)
+	// }
+	// defer rawConn.Close()
 
 	log.Println("Worker запущен:", w.Target)
 
-	conn, err := ipv4.NewRawConn(con)
-	if err != nil {
-		log.Fatalf("Ошибка создания RawConn: %v", err)
-	}
-	defer conn.Close()
-
-	for data := range c {
-		dst := config.AddrConfig{
-			Host: w.Target.Host,
-			Port: w.Target.Port,
+	for data := range ch {
+		// log.Println("Полученные данные:", len(data.Data), "для", w.Target)
+		if w.Target.SrcPort != 0 {
+			data.Src.Port = w.Target.SrcPort
 		}
 
-		w.Sender.SendPacket(conn, data.Data, data.Src, dst)
+		if w.Target.SrcHost != nil {
+			data.Src.Host = w.Target.SrcHost
+		}
+
+		w.Sender.SendPacket(data.Data, data.Src)
+
+		// time.Sleep(500 * time.Millisecond)
 	}
+
+	log.Println("Worker завершен:", w.Target)
+
 }

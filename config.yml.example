@@ -1,14 +1,27 @@
 # Server configurations
-server:
-  host: 0.0.0.0
-  port: 2088
+pipeline:
+  - name: dp_2088
+    input:
+      host: 0.0.0.0
+      port: 2088
+    targets:
+      - host: 127.0.0.1
+        port: 2089
+      - host: 127.0.0.1
+        port: 2090
+        src_host: 127.0.0.10
+        src_port: 2090
 
-targets:
-  - host: 127.0.0.1
-    port: 2089
-  - host: 127.0.0.1
-    port: 2090
-    src_port: 2090
+  - name: snmp_trap
+    input:
+      host: 0.0.0.0
+      port: 1620
+    targets:
+      - host: 10.0.0.1
+        port: 1620
+      - host: 127.0.0.1
+        port: 1621
+
 
 prometheus:
   enabled: true
@@ -17,3 +30,4 @@ prometheus:
 pprof:
   enabled: false
   listen: ":6060"
+

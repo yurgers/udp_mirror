@@ -9,10 +9,15 @@ import (
 )
 
 type Config struct {
-	Server  AddrConfig     `yaml:"server"`
+	Pipeline []Pipeline   `yaml:"pipeline"`
+	Pprof    *pprofConfig `yaml:"pprof,omitempty"`
+	Prom     *promConfig  `yaml:"prometheus,omitempty"`
+}
+
+type Pipeline struct {
+	Name    string         `yaml:"name"`
+	Input   AddrConfig     `yaml:"input"`
 	Targets []TargetConfig `yaml:"targets"`
-	Pprof   *pprofConfig   `yaml:"pprof,omitempty"`
-	Prom    *promConfig    `yaml:"prometheus,omitempty"`
 }
 
 type AddrConfig struct {
@@ -20,9 +25,15 @@ type AddrConfig struct {
 	Port uint16 `yaml:"port"`
 }
 
+// type InputConfig struct {
+// 	Host net.IP `yaml:"host"`
+// 	Port uint16 `yaml:"port"`
+// }
+
 type TargetConfig struct {
 	Host    net.IP `yaml:"host"`
 	Port    uint16 `yaml:"port"`
+	SrcHost net.IP `yaml:"src_host,omitempty"`
 	SrcPort uint16 `yaml:"src_port,omitempty"`
 }
 

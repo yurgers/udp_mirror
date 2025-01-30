@@ -1,6 +1,10 @@
 package manager
 
 import (
+	"context"
+	"errors"
+	"sync"
+
 	"udp_mirror/config"
 	"udp_mirror/internal/sender"
 	"udp_mirror/internal/worker"
@@ -8,37 +12,52 @@ import (
 
 type WorkerManager struct {
 	Workers []*worker.Worker
-	// wg      sync.WaitGroup
+
+	wg     sync.WaitGroup
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
-// NewWorkerManager создает и инициализирует WorkerManager
-func NewWorkerManager(targets []config.TargetConfig, channels *[]chan worker.IRPData) *WorkerManager {
-	manager := &WorkerManager{}
+type SenderFactoryFunc func(config.TargetConfig) (sender.PacketSender, error)
 
-	for i, target := range targets {
-		(*channels)[i] = make(chan worker.IRPData, 10)
+// NewWorkerManager создает и инициализирует WorkerManager
+func NewWorkerManager(ctx context.Context, targets []config.TargetConfig, senderFactory SenderFactoryFunc) (*WorkerManager, error) {
+	ctx, cancel := context.WithCancel(ctx)
+
+	manager := &WorkerManager{
+		ctx:    ctx,
+		cancel: cancel,
+	}
+
+	for _, target := range targets {
+		// Создаем менеджер воркеров
+		sender, err := senderFactory(target)
+		if err != nil || sender == nil {
+			return nil, errors.New("ошибка при создании PacketSender")
+		}
+
 		w := &worker.Worker{
 			Target: target,
-			Sender: &sender.UDPSender{},
+			Sender: sender,
 		}
 		manager.Workers = append(manager.Workers, w)
 
 	}
 
-	return manager
+	return manager, nil
 }
 
-// startWorker запускает воркер
-// func (m *WorkerManager) StartWorker(w *worker.Worker, c <-chan worker.IRPData) {
-// 	defer m.wg.Done()
+func (wm *WorkerManager) Start(chs []chan worker.IRPData) {
+	for i, wk := range wm.Workers {
+		wm.wg.Add(1)
+		go func(w *worker.Worker, ch <-chan worker.IRPData) {
+			defer wm.wg.Done()
+			w.ProcessPackets(ch)
+		}(wk, chs[i])
+	}
+}
 
-// 	log.Printf("Запуск воркера для %v", w)
-// 	w.ProcessPackets(c)
-// 	log.Printf("Воркер завершен для %v", w)
-// }
-
-// Shutdown завершает работу всех воркеров
-// func (m *WorkerManager) Shutdown() {
-// 	log.Println("Остановка всех воркеров")
-// 	m.wg.Wait()
-// }
+func (wm *WorkerManager) Shutdown() {
+	wm.wg.Wait()
+	wm.cancel()
+}

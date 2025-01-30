@@ -1,19 +1,19 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"udp_mirror/config"
-	"udp_mirror/internal/listener"
-	"udp_mirror/internal/manager"
 	"udp_mirror/internal/metrics"
+	"udp_mirror/internal/pipeline"
 	"udp_mirror/internal/pprof"
-	"udp_mirror/internal/worker"
 )
 
 func main() {
@@ -22,13 +22,19 @@ func main() {
 	backgroundFlag := flag.Bool("d", false, "Run in background mode")
 	flag.Parse()
 
-	// Загружаем конфигурацию
-	cfg := config.GetConfig(*configFilePtr)
-	fmt.Println(cfg)
-
 	if *backgroundFlag {
 		runInBackground(*configFilePtr, flag.Args())
 	}
+
+	// Загружаем конфигурацию
+	cfg := config.GetConfig(*configFilePtr)
+	log.Println("Config:", cfg)
+
+	// Создаем контекст с отменой
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // Гарантируем отмену контекста при выходе
+
+	go handleShutdown(cancel)
 
 	// Регистрируем метрики
 	metrics.Register()
@@ -43,37 +49,35 @@ func main() {
 		go metrics.StartPrometheus(cfg.Prom.Listen)
 	}
 
-	// Создаем слушателя
-	channels := make([]chan worker.IRPData, len(cfg.Targets))
-	listener, err := listener.NewUDPListener(cfg.Server, channels)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer listener.Close()
+	// p_cfg := cfg.Pipeline[0]
+	// pl := pipeline.NewPipeline(ctx, p_cfg)
+	// pl.Start(ctx)
 
-	// Создаем менеджер воркеров
-	workerManager := manager.NewWorkerManager(cfg.Targets, &channels)
+	var wg_pl sync.WaitGroup
 
-	var wg sync.WaitGroup
-	for i, w := range workerManager.Workers {
-		wg.Add(1)
-
-		go func(worker *worker.Worker, ch <-chan worker.IRPData) {
-			defer wg.Done()
-			worker.ProcessPackets(ch)
-			log.Printf("Воркер завершен для %v\n", w)
-		}(w, channels[i])
-
+	for _, pl_cfg := range cfg.Pipeline {
+		wg_pl.Add(1)
+		go func(p_cfg config.Pipeline) {
+			defer wg_pl.Done()
+			pl := pipeline.NewPipeline(ctx, p_cfg)
+			pl.Start(ctx)
+		}(pl_cfg)
 	}
 
-	fmt.Printf("Сервер запущен и слушает на %s\n", listener.LocalAddr())
+	// for _, pl_cfg := range cfg.Pipeline {
+	// 	go func(p_cfg config.Pipeline) {
+	// 		pl := pipeline.NewPipeline(ctx, p_cfg)
+	// 		pl.Start(ctx)
+	// 	}(pl_cfg)
+	// }
 
-	go func() {
-		listener.Listen()
-		defer listener.Shutdown()
-	}()
+	// Ожидаем завершения контекста (когда вызовем cancel)
+	<-ctx.Done()
 
-	wg.Wait()
+	log.Println("Остановка сервера...")
+	wg_pl.Wait()
+	// workerManager.Shutdown()
+	log.Println("Сервер завершил работу")
 }
 
 func runInBackground(configFile string, args []string) {
@@ -81,4 +85,14 @@ func runInBackground(configFile string, args []string) {
 	cmd := exec.Command(os.Args[0], cmdArgs...)
 	cmd.Start()
 	os.Exit(0)
+}
+
+// handleShutdown ловит SIGINT/SIGTERM и вызывает cancel()
+func handleShutdown(cancel context.CancelFunc) {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	<-sigChan // Ждём сигнала
+	log.Println("Получен сигнал завершения, останавливаем сервер...")
+	cancel() // Отправляем сигнал остановки всем горутинам
 }
