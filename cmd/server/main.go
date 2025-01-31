@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 
@@ -21,11 +22,26 @@ func main() {
 	// Парсим флаги
 	configFilePtr := flag.String("f", "config.yml", "Path to the config file")
 	backgroundFlag := flag.Bool("d", false, "Run in background mode")
+	signalFlag := flag.String("s", "", "Send signal to running process (reload, stop, quit)")
 	flag.Parse()
+
+	if *signalFlag == "reload" {
+		sendReloadSignal()
+		return
+	} else if *signalFlag == "quit" {
+		sendQuitSignal()
+		return
+	} else if *signalFlag != "" {
+		flag.Usage()
+		os.Exit(1)
+	}
 
 	if *backgroundFlag {
 		runInBackground(*configFilePtr, flag.Args())
 	}
+
+	writePIDFile()
+	defer deletePIDFile()
 
 	// Загружаем конфигурацию
 	cfg := config.GetConfig(*configFilePtr)
@@ -74,6 +90,91 @@ func main() {
 
 	// workerManager.Shutdown()
 	log.Println("[Main] Сервер завершил работу")
+}
+
+func writePIDFile() {
+	myFilePid := "udp_mirror.pid"
+	pid := os.Getpid()
+
+	_, err := os.Stat(myFilePid)
+	if err == nil {
+		log.Fatalln("Просесс udp_mirror уже запущен")
+	} else {
+		if !os.IsNotExist(err) {
+			log.Fatalf("Ошибка c pid файлом, %s\n", err)
+		}
+
+	}
+
+	err = os.WriteFile(myFilePid, []byte(strconv.Itoa(pid)), 0644)
+	if err != nil {
+		log.Fatalf("Ошибка записи PID файла: %v", err)
+	}
+}
+
+func deletePIDFile() {
+	err := os.Remove("udp_mirror.pid")
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func sendQuitSignal() {
+	pid, err := os.ReadFile("udp_mirror.pid") // Читаем PID из файла
+	if err != nil {
+		log.Fatalf("Ошибка чтения PID файла: %v", err)
+	}
+
+	pidInt, err := strconv.Atoi(string(pid))
+	if err != nil {
+		log.Fatalf("Ошибка конвертации PID: %v", err)
+	}
+
+	err = syscall.Kill(pidInt, syscall.SIGTERM)
+	if err != nil {
+		log.Fatalf("Ошибка отправки сигнала: %v", err)
+	}
+
+	log.Println("Приложение завершено!")
+}
+
+func sendStopSignal() {
+	pid, err := os.ReadFile("udp_mirror.pid") // Читаем PID из файла
+	if err != nil {
+		log.Fatalf("Приложение не запущено")
+	}
+
+	pidInt, err := strconv.Atoi(string(pid))
+	if err != nil {
+		log.Fatalf("Ошибка конвертации PID: %v", err)
+	}
+
+	err = syscall.Kill(pidInt, syscall.SIGKILL)
+	if err != nil {
+		log.Fatalf("Ошибка отправки сигнала: %v", err)
+	}
+
+	log.Println("Приложение принудительно завершено!")
+}
+
+func sendReloadSignal() {
+	log.Println("Получен сигнал на перезапуск...")
+	pid, err := os.ReadFile("udp_mirror.pid") // Читаем PID из файла
+	if err != nil {
+		log.Fatalf("Приложение не запущено")
+	}
+
+	pidInt, err := strconv.Atoi(string(pid))
+	if err != nil {
+		log.Fatalf("Ошибка конвертации PID: %v", err)
+	}
+
+	err = syscall.Kill(pidInt, syscall.SIGHUP) // Отправляем `SIGHUP`
+	if err != nil {
+		log.Fatalf("Ошибка отправки сигнала: %v", err)
+	}
+
+	log.Println("Конфиг успешно перезагружается!")
 }
 
 func runInBackground(configFile string, args []string) {
