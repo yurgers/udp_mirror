@@ -7,47 +7,13 @@ import (
 	"net"
 	"sync"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/ipv4"
 
 	"udp_mirror/config"
+	"udp_mirror/pkg/metrics"
 )
 
 var id uint16
-
-var (
-	receivedPacketsCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "received_packets_total",
-			Help: "Total number of received packets",
-		},
-		[]string{"sender"},
-	)
-
-	bytesReceived = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "received_bytes_total",
-			Help: "Total number of received bytes",
-		},
-		[]string{"sender"},
-	)
-
-	sentPacketsCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "sent_packets_total",
-			Help: "Total number of sent packets",
-		},
-		[]string{"recipient"},
-	)
-
-	bytesSent = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "sent_bytes_total",
-			Help: "Total number of sent bytes",
-		},
-		[]string{"recipient"},
-	)
-)
 
 type UDPSender struct {
 	dst     config.AddrConfig
@@ -126,15 +92,14 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 
 	buffer := append(udpHeader, data...)
 
+	recipient := fmt.Sprintf("%s:%d", s.dst.Host.String(), s.dst.Port)
+	metrics.IncrementSent(s.plName, recipient, len(buffer))
+
 	if len(buffer) <= s.mtu {
 		err := s.rawConn.WriteTo(ipHeader, buffer, nil)
 		if err != nil {
 			log.Fatalf("[Pipeline %s] WriteTo: %v", s.plName, err)
 		}
-
-		recipient := fmt.Sprintf("%s:%d", s.dst.Host.String(), s.dst.Port)
-		sentPacketsCounter.WithLabelValues(recipient).Inc()
-		bytesSent.WithLabelValues(recipient).Add(float64(len(data)))
 
 		// fmt.Println(iph)
 		// fmt.Println("=====================")
@@ -177,7 +142,6 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 
 				// fmt.Println(ipHeader)
 				// fmt.Println("=====================")
-				return
 
 			}
 

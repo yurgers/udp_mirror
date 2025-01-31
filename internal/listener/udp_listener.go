@@ -9,6 +9,7 @@ import (
 
 	"udp_mirror/config"
 	"udp_mirror/internal/worker"
+	"udp_mirror/pkg/metrics"
 )
 
 type UDPListener struct {
@@ -75,7 +76,10 @@ func (l *UDPListener) Start() {
 				return
 			}
 			// log.Println("Полученные данные от", src)
+			metrics.IncrementReceived(plName, src.IP.String(), n)
+
 			l.processData(buffer[:n], src)
+
 		}
 	}
 }

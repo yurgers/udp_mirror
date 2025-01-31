@@ -14,7 +14,7 @@ var (
 			Name: "received_packets_total",
 			Help: "Total number of received packets",
 		},
-		[]string{"sender"},
+		[]string{"pipeline_name", "sender"},
 	)
 
 	bytesReceived = prometheus.NewCounterVec(
@@ -22,7 +22,7 @@ var (
 			Name: "received_bytes_total",
 			Help: "Total number of received bytes",
 		},
-		[]string{"sender"},
+		[]string{"pipeline_name", "sender"},
 	)
 
 	sentPacketsCounter = prometheus.NewCounterVec(
@@ -30,7 +30,7 @@ var (
 			Name: "sent_packets_total",
 			Help: "Total number of sent packets",
 		},
-		[]string{"recipient"},
+		[]string{"pipeline_name", "recipient"},
 	)
 
 	bytesSent = prometheus.NewCounterVec(
@@ -38,7 +38,7 @@ var (
 			Name: "sent_bytes_total",
 			Help: "Total number of sent bytes",
 		},
-		[]string{"recipient"},
+		[]string{"pipeline_name", "recipient"},
 	)
 )
 
@@ -61,13 +61,13 @@ func StartPrometheus(addr string) {
 }
 
 // IncrementReceived увеличивает счетчик полученных пакетов и байтов
-func IncrementReceived(sender string, bytes int) {
-	receivedPacketsCounter.WithLabelValues(sender).Inc()
-	bytesReceived.WithLabelValues(sender).Add(float64(bytes))
+func IncrementReceived(plName string, sender string, bytes int) {
+	receivedPacketsCounter.WithLabelValues(plName, sender).Inc()
+	bytesReceived.WithLabelValues(plName, sender).Add(float64(bytes))
 }
 
 // IncrementSent увеличивает счетчик отправленных пакетов и байтов
-func IncrementSent(recipient string, bytes int) {
-	sentPacketsCounter.WithLabelValues(recipient).Inc()
-	bytesSent.WithLabelValues(recipient).Add(float64(bytes))
+func IncrementSent(plName string, recipient string, bytes int) {
+	sentPacketsCounter.WithLabelValues(plName, recipient).Inc()
+	bytesSent.WithLabelValues(plName, recipient).Add(float64(bytes))
 }

@@ -11,9 +11,10 @@ import (
 	"syscall"
 
 	"udp_mirror/config"
-	"udp_mirror/internal/metrics"
 	"udp_mirror/internal/pipeline"
-	"udp_mirror/internal/pprof"
+
+	"udp_mirror/pkg/metrics"
+	"udp_mirror/pkg/pprof"
 )
 
 func main() {
