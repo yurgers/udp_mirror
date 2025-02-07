@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"time"
 
@@ -66,6 +67,7 @@ func (l *UDPListener) Start() {
 			log.Printf("[Pipeline %s] UDP Listener завершает работу...\n", plName)
 			return
 		default:
+			// log.Println("запуск новой итериции ")
 			l.conn.SetReadDeadline(l.nextReadDeadline())
 			n, src, err := l.conn.ReadFromUDP(buffer)
 			if err != nil {
@@ -84,35 +86,39 @@ func (l *UDPListener) Start() {
 	}
 }
 
-// processData обрабатывает полученные данные
-func (l *UDPListener) processData(data []byte, src *net.UDPAddr) {
-	for _, channel := range l.channels {
-		channel <- worker.IRPData{
-			Data: data,
-			Src: config.AddrConfig{
-				Host: src.IP,
-				Port: uint16(src.Port),
-			},
-		}
-	}
-}
-
-// // Обрабатываем полученные данные и уведомнением переполнености канала.
+// // processData обрабатывает полученные данные
 // func (l *UDPListener) processData(data []byte, src *net.UDPAddr) {
 // 	for _, channel := range l.channels {
-// 		select {
-// 		case channel <- worker.IRPData{
+// 		channel <- worker.IRPData{
 // 			Data: data,
 // 			Src: config.AddrConfig{
 // 				Host: src.IP,
 // 				Port: uint16(src.Port),
 // 			},
-// 		}:
-// 		default:
-// 			log.Println("Канал переполнен, пакет отброшен")
 // 		}
 // 	}
 // }
+
+// Обрабатываем полученные данные и уведомнением переполнености канала.
+func (l *UDPListener) processData(data []byte, src *net.UDPAddr) {
+	plName, _ := l.ctx.Value(config.PlNameKey).(string)
+	d := worker.IRPData{
+		Data: data,
+		Src: config.AddrConfig{
+			Host: src.IP,
+			Port: uint16(src.Port),
+		},
+	}
+
+	for i, channel := range l.channels {
+		select {
+		case channel <- d:
+			slog.Debug(fmt.Sprintf("[%s] пакет отправлен в Канал %v", plName, i))
+		default:
+			slog.Debug(fmt.Sprintf("[%s] Канал %v переполнен, пакет отброшен", plName, i))
+		}
+	}
+}
 
 func (l *UDPListener) Shutdown() {
 	for _, channel := range l.channels {

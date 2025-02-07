@@ -2,12 +2,18 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"flag"
+	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -18,18 +24,44 @@ import (
 	"udp_mirror/pkg/pprof"
 )
 
+func initLog() {
+	level := slog.LevelInfo
+	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+
+	// Создаем логгер с обычным текстовым выводом
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
+
+	// Делаем этот логгер дефолтным
+	slog.SetDefault(logger)
+}
+
 func main() {
+	initLog()
+
 	// Парсим флаги
 	configFilePtr := flag.String("f", "config.yml", "Path to the config file")
 	backgroundFlag := flag.Bool("d", false, "Run in background mode")
 	signalFlag := flag.String("s", "", "Send signal to running process (reload, stop, quit)")
 	flag.Parse()
 
+	slog.Debug(fmt.Sprintf("Используемый config файл: %s", *configFilePtr))
+	pidFile := generatePIDFileName(*configFilePtr)
+
 	if *signalFlag == "reload" {
-		sendReloadSignal()
+		sendReloadSignal(pidFile)
 		return
 	} else if *signalFlag == "quit" {
-		sendQuitSignal()
+		sendQuitSignal(pidFile)
+		return
+	} else if *signalFlag == "stop" {
+		sendStopSignal(pidFile)
 		return
 	} else if *signalFlag != "" {
 		flag.Usage()
@@ -40,11 +72,19 @@ func main() {
 		runInBackground(*configFilePtr, flag.Args())
 	}
 
-	writePIDFile()
-	defer deletePIDFile()
+	writePIDFile(pidFile)
+	defer deletePIDFile(pidFile)
 
 	// Загружаем конфигурацию
-	cfg := config.GetConfig(*configFilePtr)
+	// cfg := config.GetConfig(*configFilePtr)
+
+	reloader := &config.ConfigReloader{}
+	err := reloader.LoadConfig(*configFilePtr)
+	if err != nil {
+		log.Fatalf("Ошибка загрузки конфига: %v", err)
+	}
+
+	cfg := reloader.GetConfigCopy()
 	log.Println("Config:", cfg)
 
 	// Создаем контекст с отменой
@@ -52,6 +92,7 @@ func main() {
 	defer cancel() // Гарантируем отмену контекста при выходе
 
 	go handleShutdown(cancel)
+	go handleReload(reloader, *configFilePtr)
 
 	// Регистрируем метрики
 	metrics.Register()
@@ -92,11 +133,21 @@ func main() {
 	log.Println("[Main] Сервер завершил работу")
 }
 
-func writePIDFile() {
-	myFilePid := "udp_mirror.pid"
+func generatePIDFileName(configPath string) string {
+	absPath, err := filepath.Abs(configPath)
+	if err != nil {
+		log.Fatalf("Ошибка получения абсолютного пути: %v", err)
+	}
+
+	// Вариант 2: MD5-хэш пути (если путь слишком длинный)
+	hash := md5.Sum([]byte(absPath))
+	return "udp_mirror_" + hex.EncodeToString(hash[:8]) + ".pid"
+}
+
+func writePIDFile(pidFile string) {
 	pid := os.Getpid()
 
-	_, err := os.Stat(myFilePid)
+	_, err := os.Stat(pidFile)
 	if err == nil {
 		log.Fatalln("Просесс udp_mirror уже запущен")
 	} else {
@@ -106,21 +157,21 @@ func writePIDFile() {
 
 	}
 
-	err = os.WriteFile(myFilePid, []byte(strconv.Itoa(pid)), 0644)
+	err = os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644)
 	if err != nil {
 		log.Fatalf("Ошибка записи PID файла: %v", err)
 	}
 }
 
-func deletePIDFile() {
-	err := os.Remove("udp_mirror.pid")
+func deletePIDFile(pidFile string) {
+	err := os.Remove(pidFile)
 	if err != nil {
 		log.Fatalln(err)
 	}
 }
 
-func sendQuitSignal() {
-	pid, err := os.ReadFile("udp_mirror.pid") // Читаем PID из файла
+func sendQuitSignal(pidFile string) {
+	pid, err := os.ReadFile(pidFile) // Читаем PID из файла
 	if err != nil {
 		log.Fatalf("Ошибка чтения PID файла: %v", err)
 	}
@@ -138,8 +189,9 @@ func sendQuitSignal() {
 	log.Println("Приложение завершено!")
 }
 
-func sendStopSignal() {
-	pid, err := os.ReadFile("udp_mirror.pid") // Читаем PID из файла
+func sendStopSignal(pidFile string) {
+	defer deletePIDFile(pidFile)
+	pid, err := os.ReadFile(pidFile) // Читаем PID из файла
 	if err != nil {
 		log.Fatalf("Приложение не запущено")
 	}
@@ -157,9 +209,9 @@ func sendStopSignal() {
 	log.Println("Приложение принудительно завершено!")
 }
 
-func sendReloadSignal() {
+func sendReloadSignal(pidFile string) {
 	log.Println("Получен сигнал на перезапуск...")
-	pid, err := os.ReadFile("udp_mirror.pid") // Читаем PID из файла
+	pid, err := os.ReadFile(pidFile) // Читаем PID из файла
 	if err != nil {
 		log.Fatalf("Приложение не запущено")
 	}
@@ -189,7 +241,26 @@ func handleShutdown(cancel context.CancelFunc) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	<-sigChan // Ждём сигнала
+	<-sigChan // Ждём SIGINT (Ctrl+C) или SIGTERM (kill <PID>)
 	log.Println("[Main] Получен сигнал завершения, останавливаем сервер...")
 	cancel() // Отправляем сигнал остановки всем горутинам
+}
+
+func handleReload(reloader *config.ConfigReloader, configFile string) {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGHUP)
+
+	for sig := range sigChan {
+		if sig == syscall.SIGHUP {
+			log.Println("[Config] Получен SIGHUP, обновляем конфиг...")
+			err := reloader.LoadConfig(configFile)
+			if err != nil {
+				log.Printf("Ошибка обновления конфига: %v", err)
+			}
+
+			cfg := reloader.GetConfigCopy()
+			log.Println("Config:", cfg)
+
+		}
+	}
 }

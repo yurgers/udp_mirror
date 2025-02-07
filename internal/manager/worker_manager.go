@@ -2,7 +2,8 @@ package manager
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"runtime"
 	"sync"
 
 	"udp_mirror/config"
@@ -12,10 +13,10 @@ import (
 
 type WorkerManager struct {
 	Workers []*worker.Worker
-
-	wg     sync.WaitGroup
-	ctx    context.Context
-	cancel context.CancelFunc
+	count   int
+	wg      sync.WaitGroup
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 type SenderFactoryFunc func(context.Context, config.TargetConfig) (sender.PacketSender, error)
@@ -23,25 +24,28 @@ type SenderFactoryFunc func(context.Context, config.TargetConfig) (sender.Packet
 // NewWorkerManager создает и инициализирует WorkerManager
 func NewWorkerManager(ctx context.Context, targets []config.TargetConfig, senderFactory SenderFactoryFunc) (*WorkerManager, error) {
 	ctx, cancel := context.WithCancel(ctx)
-
+	count := runtime.NumCPU() * 1
+	// count := 1
 	manager := &WorkerManager{
+		count:  count,
 		ctx:    ctx,
 		cancel: cancel,
 	}
 
 	for _, target := range targets {
-		// Создаем менеджер воркеров
-		sender, err := senderFactory(ctx, target)
-		if err != nil || sender == nil {
-			return nil, errors.New("ошибка при создании PacketSender")
-		}
+		for _ = range count {
+			// Создаем менеджер воркеров
+			sender, err := senderFactory(ctx, target)
+			if err != nil {
+				return nil, fmt.Errorf("ошибка при создании PacketSender: %w", err)
+			}
 
-		w := &worker.Worker{
-			Target: target,
-			Sender: sender,
+			w := &worker.Worker{
+				Target: target,
+				Sender: sender,
+			}
+			manager.Workers = append(manager.Workers, w)
 		}
-		manager.Workers = append(manager.Workers, w)
-
 	}
 
 	return manager, nil
@@ -53,7 +57,7 @@ func (wm *WorkerManager) Start(chs []chan worker.IRPData) {
 		go func(w *worker.Worker, ch <-chan worker.IRPData) {
 			defer wm.wg.Done()
 			w.StartProcessPackets(wm.ctx, ch)
-		}(wk, chs[i])
+		}(wk, chs[i/wm.count])
 	}
 }
 

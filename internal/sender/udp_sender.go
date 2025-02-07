@@ -62,8 +62,8 @@ func NewUDPSender(ctx context.Context, target config.TargetConfig) (PacketSender
 }
 
 func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// s.mu.Lock()
+	// defer s.mu.Unlock()
 
 	id += 1
 
@@ -142,7 +142,7 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 
 				// fmt.Println(ipHeader)
 				// fmt.Println("=====================")
-
+				return
 			}
 
 			// fmt.Println(ipHeader)
