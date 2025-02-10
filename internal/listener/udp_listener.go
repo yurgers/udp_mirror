@@ -33,6 +33,12 @@ func NewUDPListener(ctx context.Context, serverAddr config.AddrConfig, chs []cha
 		return nil, err
 	}
 
+	// Увеличиваем буфер приема до 8MB
+	err = conn.SetReadBuffer(8 * 1024 * 1024)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 
 	return &UDPListener{
@@ -45,7 +51,7 @@ func NewUDPListener(ctx context.Context, serverAddr config.AddrConfig, chs []cha
 
 // Устанавливаем таймаут для `ReadFromUDP`
 func (l *UDPListener) nextReadDeadline() time.Time {
-	return time.Now().Add(1 * time.Second)
+	return time.Now().Add(100 * time.Millisecond)
 }
 
 // Проверяем, является ли ошибка таймаутом
@@ -56,10 +62,12 @@ func isTimeoutError(err error) bool {
 
 // Listen начинает прием данных с UDP-соединения
 func (l *UDPListener) Start() {
+	defer l.Close()
 	plName, _ := l.ctx.Value(config.PlNameKey).(string)
 	log.Printf("[Pipeline %s] Сервер запущен и слушает на %s\n", plName, l.conn.LocalAddr())
 
-	buffer := make([]byte, 65536)
+	buffer := make([]byte, 65536-28)
+	// buffer := make([]byte, 1024*10)
 
 	for {
 		select {
@@ -74,51 +82,59 @@ func (l *UDPListener) Start() {
 				if isTimeoutError(err) {
 					continue // Просто повторяем чтение, если таймаут
 				}
-				log.Printf("[Pipeline %s] Ошибка чтения из UDP: %v\n", plName, err)
-				return
+				slog.Error(fmt.Sprintf("[Pipeline %s] Ошибка чтения из UDP: %v", plName, err))
+				break
 			}
-			// log.Println("Полученные данные от", src)
+			// slog.Debug(fmt.Sprintf("[Pipeline %s] Полученные данные от %v, в размере %v", plName, src, n))
 			metrics.IncrementReceived(plName, src.IP.String(), n)
 
 			l.processData(buffer[:n], src)
 
+			// go func(data []byte, src *net.UDPAddr) {
+			// 	l.processData(data, src)
+			// }(buffer[:n], src)
+
 		}
 	}
 }
 
-// // processData обрабатывает полученные данные
+// processData обрабатывает полученные данные
+func (l *UDPListener) processData(data []byte, src *net.UDPAddr) {
+	for _, channel := range l.channels {
+		channel <- worker.IRPData{
+			Data: data,
+			Src: config.AddrConfig{
+				Host: src.IP,
+				Port: uint16(src.Port),
+			},
+		}
+	}
+}
+
+// // Обрабатываем полученные данные и уведомнением переполнености канала.
 // func (l *UDPListener) processData(data []byte, src *net.UDPAddr) {
-// 	for _, channel := range l.channels {
-// 		channel <- worker.IRPData{
-// 			Data: data,
-// 			Src: config.AddrConfig{
-// 				Host: src.IP,
-// 				Port: uint16(src.Port),
-// 			},
+// 	plName, _ := l.ctx.Value(config.PlNameKey).(string)
+// 	d := worker.IRPData{
+// 		Data: data,
+// 		Src: config.AddrConfig{
+// 			Host: src.IP,
+// 			Port: uint16(src.Port),
+// 		},
+// 	}
+
+// 	for i, ch := range l.channels {
+// 		select {
+// 		case ch <- d:
+// 			slog.Debug(fmt.Sprintf("[%s] пакет отправлен в Канал %v", plName, i))
+// 			slog.Debug(fmt.Sprintf("[%s] Канал %v, наполнен на %d из %d", plName, i, len(ch), cap(ch)))
+// 			// case <-time.After(100 * time.Millisecond): // Таймаут 100мс
+// 			// 	slog.Debug(fmt.Sprintf("[%s] Канал %v переполнен, пакет отброшен", plName, i))
+
+// 		default:
+// 			slog.Debug(fmt.Sprintf("[%s] Канал %v переполнен, пакет отброшен", plName, i))
 // 		}
 // 	}
 // }
-
-// Обрабатываем полученные данные и уведомнением переполнености канала.
-func (l *UDPListener) processData(data []byte, src *net.UDPAddr) {
-	plName, _ := l.ctx.Value(config.PlNameKey).(string)
-	d := worker.IRPData{
-		Data: data,
-		Src: config.AddrConfig{
-			Host: src.IP,
-			Port: uint16(src.Port),
-		},
-	}
-
-	for i, channel := range l.channels {
-		select {
-		case channel <- d:
-			slog.Debug(fmt.Sprintf("[%s] пакет отправлен в Канал %v", plName, i))
-		default:
-			slog.Debug(fmt.Sprintf("[%s] Канал %v переполнен, пакет отброшен", plName, i))
-		}
-	}
-}
 
 func (l *UDPListener) Shutdown() {
 	for _, channel := range l.channels {

@@ -22,3 +22,10 @@ func Start(addr string) {
 		log.Fatalf("Ошибка запуска pprof: %v", err)
 	}
 }
+
+
+/*
+go tool pprof goprofex http://127.0.0.1:6060/debug/pprof/profile
+
+
+*/

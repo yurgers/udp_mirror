@@ -24,7 +24,7 @@ func NewPipeline(p_cfg config.Pipeline) *Pipeline {
 	chs := make([]chan worker.IRPData, len(p_cfg.Targets))
 	//инциализация chs
 	for i := range p_cfg.Targets {
-		chs[i] = make(chan worker.IRPData, 20)
+		chs[i] = make(chan worker.IRPData, 500)
 	}
 
 	pipeline := &Pipeline{
