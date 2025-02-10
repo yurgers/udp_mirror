@@ -144,17 +144,33 @@ func generatePIDFileName(configPath string) string {
 	return "udp_mirror_" + hex.EncodeToString(hash[:8]) + ".pid"
 }
 
-func writePIDFile(pidFile string) {
-	pid := os.Getpid()
+func processExists(pidFile string) error {
 
 	_, err := os.Stat(pidFile)
-	if err == nil {
-		log.Fatalln("Просесс udp_mirror уже запущен")
-	} else {
+	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Fatalf("Ошибка c pid файлом, %s\n", err)
 		}
+		return nil
+	}
 
+	pid := readPidFile(pidFile)
+
+	process, _ := os.FindProcess(pid)
+	if process == nil {
+		deletePIDFile(pidFile)
+	}
+
+	return nil
+
+}
+
+func writePIDFile(pidFile string) {
+	pid := os.Getpid()
+
+	err := processExists(pidFile)
+	if err != nil {
+		log.Fatalln("Просесс udp_mirror уже запущен")
 	}
 
 	err = os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644)
@@ -170,18 +186,25 @@ func deletePIDFile(pidFile string) {
 	}
 }
 
-func sendQuitSignal(pidFile string) {
+func readPidFile(pidFile string) int {
 	pid, err := os.ReadFile(pidFile) // Читаем PID из файла
 	if err != nil {
 		log.Fatalf("Ошибка чтения PID файла: %v", err)
 	}
 
-	pidInt, err := strconv.Atoi(string(pid))
+	cleaned := strings.TrimSpace(string(pid))
+	pidInt, err := strconv.Atoi(string(cleaned))
 	if err != nil {
 		log.Fatalf("Ошибка конвертации PID: %v", err)
 	}
 
-	err = syscall.Kill(pidInt, syscall.SIGTERM)
+	return pidInt
+}
+
+func sendQuitSignal(pidFile string) {
+	pidInt := readPidFile(pidFile)
+
+	err := syscall.Kill(pidInt, syscall.SIGTERM)
 	if err != nil {
 		log.Fatalf("Ошибка отправки сигнала: %v", err)
 	}
@@ -232,7 +255,10 @@ func sendReloadSignal(pidFile string) {
 func runInBackground(configFile string, args []string) {
 	cmdArgs := append([]string{"-f", configFile}, args...)
 	cmd := exec.Command(os.Args[0], cmdArgs...)
-	cmd.Start()
+	err := cmd.Start()
+	if err != nil {
+		log.Fatalln(err)
+	}
 	os.Exit(0)
 }
 

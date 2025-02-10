@@ -33,7 +33,7 @@ func NewWorkerManager(ctx context.Context, targets []config.TargetConfig, sender
 	}
 
 	for _, target := range targets {
-		for _ = range count {
+		for range count {
 			// Создаем менеджер воркеров
 			sender, err := senderFactory(ctx, target)
 			if err != nil {

@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"net"
+	"sync"
 	"time"
 
 	"udp_mirror/config"
@@ -66,7 +67,11 @@ func (l *UDPListener) Start() {
 	plName, _ := l.ctx.Value(config.PlNameKey).(string)
 	log.Printf("[Pipeline %s] Сервер запущен и слушает на %s\n", plName, l.conn.LocalAddr())
 
-	buffer := make([]byte, 65536-28)
+	bufPool := sync.Pool{
+		New: func() any {
+			return make([]byte, 65536-28) // Выделяем буфер заранее
+		},
+	}
 	// buffer := make([]byte, 1024*10)
 
 	for {
@@ -77,8 +82,13 @@ func (l *UDPListener) Start() {
 		default:
 			// log.Println("запуск новой итериции ")
 			l.conn.SetReadDeadline(l.nextReadDeadline())
+
+			// Получаем буфер из пула
+			buffer := bufPool.Get().([]byte)
+
 			n, src, err := l.conn.ReadFromUDP(buffer)
 			if err != nil {
+				bufPool.Put(buffer)
 				if isTimeoutError(err) {
 					continue // Просто повторяем чтение, если таймаут
 				}
@@ -88,18 +98,22 @@ func (l *UDPListener) Start() {
 			// slog.Debug(fmt.Sprintf("[Pipeline %s] Полученные данные от %v, в размере %v", plName, src, n))
 			metrics.IncrementReceived(plName, src.IP.String(), n)
 
-			l.processData(buffer[:n], src)
+			safeData := make([]byte, n)
+			copy(safeData, buffer[:n])
+			// fmt.Printf("Адрес buffer: %p\n", unsafe.Pointer(&buffer[0]))
+			// fmt.Printf("Адрес safeData: %p\n", unsafe.Pointer(&safeData[0]))
 
-			// go func(data []byte, src *net.UDPAddr) {
-			// 	l.processData(data, src)
-			// }(buffer[:n], src)
+			l.processData(safeData, src)
 
+			bufPool.Put(buffer)
 		}
 	}
 }
 
 // processData обрабатывает полученные данные
 func (l *UDPListener) processData(data []byte, src *net.UDPAddr) {
+	// fmt.Printf("data: %v, Len: %d\n", data, len(data))
+	// fmt.Printf("Адрес safeData: %p\n", unsafe.Pointer(&data[0]))
 	for _, channel := range l.channels {
 		channel <- worker.IRPData{
 			Data: data,

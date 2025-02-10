@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"sync"
 
 	"golang.org/x/net/ipv4"
 
@@ -20,8 +19,8 @@ type UDPSender struct {
 	mtu     int
 	conn    net.PacketConn
 	rawConn *ipv4.RawConn
-	mu      sync.Mutex
-	plName  string
+	// mu      sync.Mutex
+	plName string
 }
 
 func NewUDPSender(ctx context.Context, target config.TargetConfig) (PacketSender, error) {
