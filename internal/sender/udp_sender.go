@@ -47,7 +47,7 @@ func NewUDPSender(ctx context.Context, target config.TargetConfig) (PacketSender
 	}
 
 	mtu := 1480 //1500 - 20 (ip) - 8 (udp)
-	if dst.Host.String() == "172.0.0.1" {
+	if dst.Host.String() == "127.0.0.1" {
 		mtu = 65508
 	}
 
