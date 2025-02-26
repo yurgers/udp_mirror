@@ -23,7 +23,7 @@ type UDPSender struct {
 	plName string
 }
 
-func NewUDPSender(ctx context.Context, target config.TargetConfig) (PacketSender, error) {
+func NewUDPSender(ctx context.Context, target config.TargetConfig) (PacketSender, error) {                                                      
 	plName, _ := ctx.Value(config.PlNameKey).(string)
 
 	listen := "127.0.0.1"
