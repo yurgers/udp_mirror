@@ -1,3 +1,12 @@
+/*
+apt-get install graphviz gv
+
+go tool pprof -http=10.133.132.20:8080 goprofex http://127.0.0.1:6060/debug/pprof/profile
+go tool pprof -http=10.133.132.20:8080 goprofex http://127.0.0.1:6060/debug/pprof/goroutine
+
+*/
+
+
 package pprof
 
 import (
@@ -24,8 +33,3 @@ func Start(addr string) {
 }
 
 
-/*
-go tool pprof goprofex http://127.0.0.1:6060/debug/pprof/profile
-
-
-*/
