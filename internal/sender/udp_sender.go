@@ -23,7 +23,7 @@ type UDPSender struct {
 	plName string
 }
 
-func NewUDPSender(ctx context.Context, target config.TargetConfig) (PacketSender, error) {                                                      
+func NewUDPSender(ctx context.Context, target config.TargetConfig) (PacketSender, error) {
 	plName, _ := ctx.Value(config.PlNameKey).(string)
 
 	listen := "127.0.0.1"
@@ -90,9 +90,10 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 	}
 
 	buffer := append(udpHeader, data...)
+	// log.Printf("Адрес buffer: %p\n", unsafe.Pointer(&buffer[0]))
 
 	recipient := fmt.Sprintf("%s:%d", s.dst.Host.String(), s.dst.Port)
-	metrics.IncrementSent(s.plName, recipient, len(buffer))
+	metrics.IncrementSent(s.plName, recipient, len(data))
 
 	if len(buffer) <= s.mtu {
 		err := s.rawConn.WriteTo(ipHeader, buffer, nil)

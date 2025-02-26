@@ -23,7 +23,7 @@ func (w *Worker) StartProcessPackets(ctx context.Context, ch <-chan IRPData) {
 	log.Printf("[Pipeline %s] Worker запущен: %+v", plName, w.Target)
 
 	for data := range ch {
-		// log.Printf("Полученные данные: %v len: %d для %v\n", data.Data, len(data.Data), w.Target)
+		// log.Printf("Полученные данные: len: %d для %v\n", len(data.Data), w.Target)
 		// log.Printf("Адрес inSafeData: %p\n", unsafe.Pointer(&data.Data[0]))
 		if w.Target.SrcPort != 0 {
 			data.Src.Port = w.Target.SrcPort
