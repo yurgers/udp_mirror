@@ -62,13 +62,13 @@ func StartPrometheus(addr string) {
 }
 
 // IncrementReceived увеличивает счетчик полученных пакетов и байтов
-func IncrementReceived(listName string, plName string, sender string, bytes int) {
+func IncrementReceived(listName, plName, sender string, bytes int) {
 	receivedPacketsCounter.WithLabelValues(plName, sender, listName).Inc()
 	receivedBytesCounter.WithLabelValues(plName, sender, listName).Add(float64(bytes))
 }
 
 // IncrementSent увеличивает счетчик отправленных пакетов и байтов
-func IncrementSent(plName string, recipient string, bytes int) {
+func IncrementSent(plName, recipient string, bytes int) {
 	sentPacketsCounter.WithLabelValues(plName, recipient).Inc()
 	sendBytesCounter.WithLabelValues(plName, recipient).Add(float64(bytes))
 }

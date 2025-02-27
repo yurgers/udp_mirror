@@ -6,13 +6,12 @@ go tool pprof -http=10.133.132.20:8080 goprofex http://127.0.0.1:6060/debug/ppro
 
 */
 
-
-package pprof
+package pprofhttp
 
 import (
 	"log"
 	"net/http"
-	"net/http/pprof"
+	"net/http/pprof" // подключаем pprof
 )
 
 // Start запускает pprof-сервер на указанном адресе
@@ -31,5 +30,3 @@ func Start(addr string) {
 		log.Fatalf("Ошибка запуска pprof: %v", err)
 	}
 }
-
-

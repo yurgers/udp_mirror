@@ -61,18 +61,15 @@ func listenReusePort(addr *net.UDPAddr) *net.UDPConn {
 	}
 
 	lp, err := lc.ListenPacket(context.Background(), "udp", addr.String())
-
+	if err != nil {
+		log.Fatal(err)
+	}
 	conn := lp.(*net.UDPConn)
-
-	// conn, err := net.ListenUDP("udp", addr)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
 
 	// Увеличиваем буфер приема до 8MB
 	err = conn.SetReadBuffer(32 * 1024 * 1024)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
 	}
 
 	return conn
@@ -81,7 +78,7 @@ func listenReusePort(addr *net.UDPAddr) *net.UDPConn {
 // Устанавливаем таймаут для `ReadFromUDP`
 func (l *UDPListener) nextReadDeadline() time.Time {
 	return time.Now().Add(300 * time.Millisecond)
-	// return time.Now().Add(1 * time.Second)
+	// return time.Now().Add(10 * time.Second)
 }
 
 // Проверяем, является ли ошибка таймаутом
@@ -90,12 +87,11 @@ func isTimeoutError(err error) bool {
 	return ok && netErr.Timeout()
 }
 
-// Listen начинает прием данных с UDP-соединения
+// Start Listen начинает прием данных с UDP-соединения
 func (l *UDPListener) Start(lName string) {
 	conn := listenReusePort(l.addr)
 	defer conn.Close()
 
-	// defer l.Close()
 	plName, _ := l.ctx.Value(config.PlNameKey).(string)
 	log.Printf("[Pipeline %s] Сервер запущен и слушает на %s\n", plName, conn.LocalAddr())
 
@@ -113,7 +109,10 @@ func (l *UDPListener) Start(lName string) {
 			return
 		default:
 			// log.Println("запуск новой итериции ")
-			conn.SetReadDeadline(l.nextReadDeadline())
+			err := conn.SetReadDeadline(l.nextReadDeadline())
+			if err != nil {
+				slog.Error("SetReadDeadline: " + err.Error())
+			}
 
 			// Получаем буфер из пула
 			buffer := bufPool.Get().([]byte)
@@ -209,7 +208,7 @@ func (l *UDPListener) Shutdown() {
 	// l.Close()
 }
 
-// Close закрывает соединение UDP
+// // Close закрывает соединение UDP
 // func (l *UDPListener) Close() error {
 // 	return l.conn.Close()
 // }

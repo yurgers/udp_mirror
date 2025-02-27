@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"runtime"
+	"sync"
 	"udp_mirror/config"
 	"udp_mirror/internal/listener"
 	"udp_mirror/internal/manager"
@@ -20,11 +22,12 @@ type Pipeline struct {
 	Targets []config.TargetConfig
 }
 
-// NewWorkerManager создает и инициализирует WorkerManager
+// NewPipeline создает и инициализирует Pipeline
 func NewPipeline(p_cfg config.Pipeline) *Pipeline {
 
 	chs := make([]chan worker.IRPData, len(p_cfg.Targets))
-	//инциализация chs
+
+	// инциализация chs
 	for i := range p_cfg.Targets {
 		chs[i] = make(chan worker.IRPData, 1500)
 	}
@@ -51,17 +54,21 @@ func (pl *Pipeline) Start(ctx context.Context) {
 	// Создаем слушателя
 	listener, err := listener.NewUDPListener(ctx, pl.Input, pl.Channels)
 	if err != nil {
-		log.Fatalf("[Pipeline %s] Ошибка запуска UDP слушателя: %v\n", pl.Name, err)
+		msg := fmt.Sprintf("[Pipeline %s] Ошибка запуска UDP слушателя: %v\n", pl.Name, err)
+		slog.Error(msg)
+		return
 	}
 	// defer listener.Close()
 	listenerWorker := runtime.NumCPU() / 2
 	// listenerWorker := 4
+	var wg sync.WaitGroup
 
 	for i := 0; i < listenerWorker; i++ {
 		lName := fmt.Sprintf("%d", i)
+		wg.Add(1)
 		go func(lName string) {
 			listener.Start(lName)
-
+			defer wg.Done()
 		}(lName)
 	}
 	workerManager, err := manager.NewWorkerManager(ctx, pl.Targets, sender.NewUDPSender)
@@ -73,6 +80,8 @@ func (pl *Pipeline) Start(ctx context.Context) {
 
 	<-ctx.Done()
 	log.Printf("[Pipeline %s] Остановка...\n", pl.Name)
+
+	wg.Wait()
 	listener.Shutdown()
 
 	workerManager.Shutdown()
