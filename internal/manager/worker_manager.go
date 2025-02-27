@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sync"
 
 	"udp_mirror/config"
@@ -23,8 +24,8 @@ type SenderFactoryFunc func(context.Context, config.TargetConfig) (sender.Packet
 // NewWorkerManager создает и инициализирует WorkerManager
 func NewWorkerManager(ctx context.Context, targets []config.TargetConfig, senderFactory SenderFactoryFunc) (*WorkerManager, error) {
 	ctx, cancel := context.WithCancel(ctx)
-	// count := runtime.NumCPU() * 1
-	count := 2
+	count := runtime.NumCPU()
+	// count := 8
 
 	manager := &WorkerManager{
 		count:  count,

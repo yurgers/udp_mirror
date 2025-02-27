@@ -20,6 +20,7 @@ import (
 type UDPListener struct {
 	addr *net.UDPAddr
 	// conn     *net.UDPConn
+	// channels []chan worker.IRPData
 	channels []chan worker.IRPData
 
 	ctx    context.Context
@@ -33,16 +34,11 @@ func NewUDPListener(ctx context.Context, serverAddr config.AddrConfig, chs []cha
 		return nil, err
 	}
 
-	// conn, err := net.ListenUDP("udp", addr)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
 	ctx, cancel := context.WithCancel(ctx)
 
 	return &UDPListener{
 		addr: addr,
-		// conn:     conn,
+
 		channels: chs,
 		ctx:      ctx,
 		cancel:   cancel,
@@ -174,6 +170,7 @@ func (l *UDPListener) processData(data *[]byte, src *net.UDPAddr) {
 	for _, ch := range l.channels {
 		select {
 		case ch <- d:
+		case <-time.After(100 * time.Millisecond):
 		default:
 		}
 	}

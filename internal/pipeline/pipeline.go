@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime"
 	"udp_mirror/config"
 	"udp_mirror/internal/listener"
 	"udp_mirror/internal/manager"
@@ -53,14 +54,14 @@ func (pl *Pipeline) Start(ctx context.Context) {
 		log.Fatalf("[Pipeline %s] Ошибка запуска UDP слушателя: %v\n", pl.Name, err)
 	}
 	// defer listener.Close()
-	// listenerWorker := runtime.NumCPU()
-	listenerWorker := 4
+	listenerWorker := runtime.NumCPU() / 2
+	// listenerWorker := 4
 
 	for i := 0; i < listenerWorker; i++ {
 		lName := fmt.Sprintf("%d", i)
 		go func(lName string) {
 			listener.Start(lName)
-			defer listener.Shutdown()
+
 		}(lName)
 	}
 	workerManager, err := manager.NewWorkerManager(ctx, pl.Targets, sender.NewUDPSender)
@@ -72,6 +73,8 @@ func (pl *Pipeline) Start(ctx context.Context) {
 
 	<-ctx.Done()
 	log.Printf("[Pipeline %s] Остановка...\n", pl.Name)
+	listener.Shutdown()
+
 	workerManager.Shutdown()
 
 	log.Printf("[Pipeline %s] Завершен\n", pl.Name)
