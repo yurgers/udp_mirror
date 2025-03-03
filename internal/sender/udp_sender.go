@@ -47,7 +47,7 @@ func NewUDPSender(ctx context.Context, target config.TargetConfig) (PacketSender
 		Port: target.Port,
 	}
 
-	mtu := 1480 //1500 - 20 (ip) - 8 (udp)
+	mtu := 1480 // 1500 - 20 (ip)  - 8 (udp)
 	if dst.Host.String() == "127.0.0.1" {
 		mtu = 65508
 	}
@@ -87,7 +87,10 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 		Dst:      s.dst.Host.To4(),
 	}
 
-	buffer := append(udpHeader, data...)
+	buffer := make([]byte, len(udpHeader)+len(data))
+	copy(buffer, udpHeader)
+	copy(buffer[len(udpHeader):], data)
+	// buffer := append(append([]byte{}, udpHeader...), data...)
 	// log.Printf("Адрес buffer: %p\n", unsafe.Pointer(&buffer[0]))
 
 	recipient := fmt.Sprintf("%s:%d", s.dst.Host.String(), s.dst.Port)

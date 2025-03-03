@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
-	"runtime"
 	"sync"
 	"udp_mirror/config"
 	"udp_mirror/internal/listener"
@@ -23,21 +22,21 @@ type Pipeline struct {
 }
 
 // NewPipeline создает и инициализирует Pipeline
-func NewPipeline(p_cfg config.Pipeline) *Pipeline {
+func NewPipeline(plCfg config.Pipeline) *Pipeline {
 
-	chs := make([]chan worker.IRPData, len(p_cfg.Targets))
+	chs := make([]chan worker.IRPData, len(plCfg.Targets))
 
 	// инциализация chs
-	for i := range p_cfg.Targets {
+	for i := range plCfg.Targets {
 		chs[i] = make(chan worker.IRPData, 1500)
 	}
 
 	pipeline := &Pipeline{
 		Channels: chs,
 
-		Name:    p_cfg.Name,
-		Input:   p_cfg.Input,
-		Targets: p_cfg.Targets,
+		Name:    plCfg.Name,
+		Input:   plCfg.Input,
+		Targets: plCfg.Targets,
 	}
 
 	return pipeline
@@ -59,8 +58,9 @@ func (pl *Pipeline) Start(ctx context.Context) {
 		return
 	}
 	// defer listener.Close()
-	listenerWorker := runtime.NumCPU() / 2
-	// listenerWorker := 4
+	// listenerWorker := runtime.NumCPU()/2 - 3
+	listenerWorker := 2
+
 	var wg sync.WaitGroup
 
 	for i := 0; i < listenerWorker; i++ {

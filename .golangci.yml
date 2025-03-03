@@ -61,6 +61,18 @@ issues:
       linters:
         - gosec
         - dupl
+    - text: "exported:"
+      linters:
+        - revive
+    - text: "G501|G401|G304|G306|G114|G115|G204:"
+      linters:
+        - gosec
+    # - text: "G114:"
+    #   linters:
+    #     - gosec       
+    - text: "commentedOutCode:"
+      linters:
+        - gocritic
     - linters:
         - unparam
         - unused

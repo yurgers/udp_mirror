@@ -48,7 +48,7 @@ func NewUDPListener(ctx context.Context, serverAddr config.AddrConfig, chs []cha
 func listenReusePort(addr *net.UDPAddr) *net.UDPConn {
 	// Настройка SO_REUSEPORT
 	lc := net.ListenConfig{
-		Control: func(network, address string, c syscall.RawConn) error {
+		Control: func(_, address string, c syscall.RawConn) error {
 			var opErr error
 			err := c.Control(func(fd uintptr) {
 				opErr = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
