@@ -97,3 +97,7 @@ prometheus:
 - **WorkerManager** (`worker_manager.go`) - управляет группой воркеров
 - **Worker** (`worker.go`) - обрабатывает входящие пакеты
 - **Sender** (`udp_sender.go`) - отправляет UDP-пакеты
+
+
+---
+

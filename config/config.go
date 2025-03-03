@@ -1,7 +1,9 @@
 package config
 
 import (
+	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"os"
 
@@ -47,7 +49,7 @@ type promConfig struct {
 	Listen  string `yaml:"listen"`
 }
 
-func GetConfig(fileName string) Config {
+func GetConfig(fileName string) (Config, error) {
 	f, err := os.Open(fileName)
 	if err != nil {
 		log.Fatalf("Ошибка открытия файла %s: %v", fileName, err)
@@ -58,9 +60,11 @@ func GetConfig(fileName string) Config {
 	decoder := yaml.NewDecoder(f)
 	err = decoder.Decode(&cfg)
 	if err != nil {
-		log.Fatalf("Ошибка парсинга файла %s: %v", fileName, err)
+		msg := fmt.Sprintf("Ошибка парсинга файла %s: %v", fileName, err)
+		slog.Error(msg)
+		return cfg, err
 	}
-	return cfg
+	return cfg, nil
 }
 
 type ctxKey string

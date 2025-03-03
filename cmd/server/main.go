@@ -21,7 +21,7 @@ import (
 	"udp_mirror/internal/pipeline"
 
 	"udp_mirror/pkg/metrics"
-	"udp_mirror/pkg/pprof"
+	"udp_mirror/pkg/pprofhttp"
 )
 
 func initLog() {
@@ -81,7 +81,9 @@ func main() {
 	reloader := &config.ConfigReloader{}
 	err := reloader.LoadConfig(*configFilePtr)
 	if err != nil {
-		log.Fatalf("Ошибка загрузки конфига: %v", err)
+		msg := fmt.Sprintf("Ошибка загрузки конфига: %v", err)
+		slog.Error(msg)
+		return
 	}
 
 	cfg := reloader.GetConfigCopy()
@@ -99,7 +101,7 @@ func main() {
 
 	// Запускаем pprof, если включено
 	if cfg.Pprof != nil && cfg.Pprof.Enabled {
-		go pprof.Start(cfg.Pprof.Listen)
+		go pprofhttp.Start(cfg.Pprof.Listen)
 	}
 
 	// Запускаем Prometheus, если включено
@@ -111,22 +113,22 @@ func main() {
 	// pl := pipeline.NewPipeline(ctx, p_cfg)
 	// pl.Start(ctx)
 
-	var wg_pl sync.WaitGroup
+	var wgPl sync.WaitGroup
 
-	for _, pl_cfg := range cfg.Pipeline {
-		wg_pl.Add(1)
-		go func(p_cfg config.Pipeline) {
-			defer wg_pl.Done()
-			pl := pipeline.NewPipeline(p_cfg)
+	for _, plСfg := range cfg.Pipeline {
+		wgPl.Add(1)
+		go func(pСfg *config.Pipeline) {
+			defer wgPl.Done()
+			pl := pipeline.NewPipeline(*pСfg)
 			pl.Start(ctx)
-		}(pl_cfg)
+		}(&plСfg)
 	}
 
 	// Ожидаем завершения контекста (когда вызовем cancel)
 	<-ctx.Done()
 	log.Println("[Main] Остановка сервера...")
 
-	wg_pl.Wait()
+	wgPl.Wait()
 	log.Println("[Main] Все Pipeline завершены...")
 
 	// workerManager.Shutdown()
@@ -150,6 +152,7 @@ func processExists(pidFile string) error {
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Fatalf("Ошибка c pid файлом, %s\n", err)
+			return err
 		}
 		return nil
 	}
@@ -173,7 +176,7 @@ func writePIDFile(pidFile string) {
 		log.Fatalln("Просесс udp_mirror уже запущен")
 	}
 
-	err = os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644)
+	err = os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0o644)
 	if err != nil {
 		log.Fatalf("Ошибка записи PID файла: %v", err)
 	}
@@ -193,7 +196,7 @@ func readPidFile(pidFile string) int {
 	}
 
 	cleaned := strings.TrimSpace(string(pid))
-	pidInt, err := strconv.Atoi(string(cleaned))
+	pidInt, err := strconv.Atoi(cleaned)
 	if err != nil {
 		log.Fatalf("Ошибка конвертации PID: %v", err)
 	}
@@ -216,20 +219,25 @@ func sendStopSignal(pidFile string) {
 	defer deletePIDFile(pidFile)
 	pid, err := os.ReadFile(pidFile) // Читаем PID из файла
 	if err != nil {
-		log.Fatalf("Приложение не запущено")
+		slog.Error("Приложение не запущено")
+		return
 	}
 
 	pidInt, err := strconv.Atoi(string(pid))
 	if err != nil {
-		log.Fatalf("Ошибка конвертации PID: %v", err)
+		msg := fmt.Sprintf("Ошибка конвертации PID: %v", err)
+		slog.Error(msg)
+		return
 	}
 
 	err = syscall.Kill(pidInt, syscall.SIGKILL)
 	if err != nil {
-		log.Fatalf("Ошибка отправки сигнала: %v", err)
+		msg := fmt.Sprintf("Ошибка отправки сигнала: %v", err)
+		slog.Error(msg)
+		return
 	}
 
-	log.Println("Приложение принудительно завершено!")
+	slog.Info("Приложение принудительно завершено!")
 }
 
 func sendReloadSignal(pidFile string) {
@@ -277,16 +285,19 @@ func handleReload(reloader *config.ConfigReloader, configFile string) {
 	signal.Notify(sigChan, syscall.SIGHUP)
 
 	for sig := range sigChan {
-		if sig == syscall.SIGHUP {
-			log.Println("[Config] Получен SIGHUP, обновляем конфиг...")
-			err := reloader.LoadConfig(configFile)
-			if err != nil {
-				log.Printf("Ошибка обновления конфига: %v", err)
-			}
-
-			cfg := reloader.GetConfigCopy()
-			log.Println("Config:", cfg)
-
+		if sig != syscall.SIGHUP {
+			continue
 		}
+
+		log.Println("[Config] Получен SIGHUP, обновляем конфиг...")
+		err := reloader.LoadConfig(configFile)
+		if err != nil {
+			log.Printf("Ошибка обновления конфига: %v", err)
+		}
+
+		cfg := reloader.GetConfigCopy()
+		log.Println("Config:", cfg)
+
 	}
+
 }

@@ -2,7 +2,10 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"log/slog"
+	"sync"
 	"udp_mirror/config"
 	"udp_mirror/internal/listener"
 	"udp_mirror/internal/manager"
@@ -18,21 +21,22 @@ type Pipeline struct {
 	Targets []config.TargetConfig
 }
 
-// NewWorkerManager создает и инициализирует WorkerManager
-func NewPipeline(p_cfg config.Pipeline) *Pipeline {
+// NewPipeline создает и инициализирует Pipeline
+func NewPipeline(plCfg config.Pipeline) *Pipeline {
 
-	chs := make([]chan worker.IRPData, len(p_cfg.Targets))
-	//инциализация chs
-	for i := range p_cfg.Targets {
-		chs[i] = make(chan worker.IRPData, 500)
+	chs := make([]chan worker.IRPData, len(plCfg.Targets))
+
+	// инциализация chs
+	for i := range plCfg.Targets {
+		chs[i] = make(chan worker.IRPData, 1500)
 	}
 
 	pipeline := &Pipeline{
 		Channels: chs,
 
-		Name:    p_cfg.Name,
-		Input:   p_cfg.Input,
-		Targets: p_cfg.Targets,
+		Name:    plCfg.Name,
+		Input:   plCfg.Input,
+		Targets: plCfg.Targets,
 	}
 
 	return pipeline
@@ -49,15 +53,24 @@ func (pl *Pipeline) Start(ctx context.Context) {
 	// Создаем слушателя
 	listener, err := listener.NewUDPListener(ctx, pl.Input, pl.Channels)
 	if err != nil {
-		log.Fatalf("[Pipeline %s] Ошибка запуска UDP слушателя: %v\n", pl.Name, err)
+		msg := fmt.Sprintf("[Pipeline %s] Ошибка запуска UDP слушателя: %v\n", pl.Name, err)
+		slog.Error(msg)
+		return
 	}
-	defer listener.Close()
+	// defer listener.Close()
+	// listenerWorker := runtime.NumCPU()/2 - 3
+	listenerWorker := 2
 
-	go func() {
-		listener.Start()
-		defer listener.Shutdown()
-	}()
+	var wg sync.WaitGroup
 
+	for i := 0; i < listenerWorker; i++ {
+		lName := fmt.Sprintf("%d", i)
+		wg.Add(1)
+		go func(lName string) {
+			listener.Start(lName)
+			defer wg.Done()
+		}(lName)
+	}
 	workerManager, err := manager.NewWorkerManager(ctx, pl.Targets, sender.NewUDPSender)
 	if err != nil {
 		log.Panicf("[Pipeline %s] %v", pl.Name, err)
@@ -67,6 +80,10 @@ func (pl *Pipeline) Start(ctx context.Context) {
 
 	<-ctx.Done()
 	log.Printf("[Pipeline %s] Остановка...\n", pl.Name)
+
+	wg.Wait()
+	listener.Shutdown()
+
 	workerManager.Shutdown()
 
 	log.Printf("[Pipeline %s] Завершен\n", pl.Name)

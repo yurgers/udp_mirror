@@ -14,15 +14,15 @@ var (
 			Name: "received_packets_total",
 			Help: "Total number of received packets",
 		},
-		[]string{"pipeline_name", "sender"},
+		[]string{"pipeline_name", "sender", "lisneter_number"},
 	)
 
-	bytesReceived = prometheus.NewCounterVec(
+	receivedBytesCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "received_bytes_total",
 			Help: "Total number of received bytes",
 		},
-		[]string{"pipeline_name", "sender"},
+		[]string{"pipeline_name", "sender", "lisneter_number"},
 	)
 
 	sentPacketsCounter = prometheus.NewCounterVec(
@@ -33,7 +33,7 @@ var (
 		[]string{"pipeline_name", "recipient"},
 	)
 
-	bytesSent = prometheus.NewCounterVec(
+	sendBytesCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "sent_bytes_total",
 			Help: "Total number of sent bytes",
@@ -45,9 +45,10 @@ var (
 // Register регистрирует метрики в Prometheus
 func Register() {
 	prometheus.MustRegister(receivedPacketsCounter)
-	prometheus.MustRegister(bytesReceived)
+	prometheus.MustRegister(receivedBytesCounter)
+
 	prometheus.MustRegister(sentPacketsCounter)
-	prometheus.MustRegister(bytesSent)
+	prometheus.MustRegister(sendBytesCounter)
 }
 
 // StartPrometheus запускает сервер для экспорта метрик
@@ -61,13 +62,13 @@ func StartPrometheus(addr string) {
 }
 
 // IncrementReceived увеличивает счетчик полученных пакетов и байтов
-func IncrementReceived(plName string, sender string, bytes int) {
-	receivedPacketsCounter.WithLabelValues(plName, sender).Inc()
-	bytesReceived.WithLabelValues(plName, sender).Add(float64(bytes))
+func IncrementReceived(listName, plName, sender string, bytes int) {
+	receivedPacketsCounter.WithLabelValues(plName, sender, listName).Inc()
+	receivedBytesCounter.WithLabelValues(plName, sender, listName).Add(float64(bytes))
 }
 
 // IncrementSent увеличивает счетчик отправленных пакетов и байтов
-func IncrementSent(plName string, recipient string, bytes int) {
+func IncrementSent(plName, recipient string, bytes int) {
 	sentPacketsCounter.WithLabelValues(plName, recipient).Inc()
-	bytesSent.WithLabelValues(plName, recipient).Add(float64(bytes))
+	sendBytesCounter.WithLabelValues(plName, recipient).Add(float64(bytes))
 }

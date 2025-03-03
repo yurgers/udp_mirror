@@ -16,7 +16,10 @@ func (cr *ConfigReloader) LoadConfig(fileName string) error {
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
 
-	cfg := GetConfig(fileName) // Читаем новый конфиг
+	cfg, err := GetConfig(fileName) // Читаем новый конфиг
+	if err != nil {
+		return err
+	}
 	cr.config = &cfg
 
 	log.Println("[Config] Конфигурация обновлена!")
