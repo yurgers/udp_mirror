@@ -99,7 +99,7 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 	if len(buffer) <= s.mtu {
 		err := s.rawConn.WriteTo(ipHeader, buffer, nil)
 		if err != nil {
-			msg := fmt.Sprintf("[Pipeline %v] WriteTo: %v\n", s.plName, err)
+			msg := fmt.Sprintf("[Pipeline %v] WriteTo %v: %v\n", s.plName, recipient, err)
 			slog.Error(msg)
 			return
 		}
@@ -128,7 +128,7 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 
 				err := s.rawConn.WriteTo(ipHeader, fragment, nil)
 				if err != nil {
-					msg := fmt.Sprintf("[Pipeline %v] WriteTo: %v\n", s.plName, err)
+					msg := fmt.Sprintf("[Pipeline %v] WriteTo %v: %v\n", s.plName, recipient, err)
 					slog.Error(msg)
 					return
 				}
@@ -142,7 +142,7 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 
 				err := s.rawConn.WriteTo(ipHeader, buffer, nil)
 				if err != nil {
-					log.Fatalf("[Pipeline %v] WriteTo: %v\n", s.plName, err)
+					msg := fmt.Sprintf("[Pipeline %v] WriteTo %v: %v\n", s.plName, recipient, err)
 				}
 
 				// fmt.Println(ipHeader)
