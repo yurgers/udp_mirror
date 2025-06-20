@@ -143,6 +143,7 @@ func (s *UDPSender) SendPacket(data []byte, src config.AddrConfig) {
 				err := s.rawConn.WriteTo(ipHeader, buffer, nil)
 				if err != nil {
 					msg := fmt.Sprintf("[Pipeline %v] WriteTo %v: %v\n", s.plName, recipient, err)
+					slog.Error(msg)
 				}
 
 				// fmt.Println(ipHeader)
